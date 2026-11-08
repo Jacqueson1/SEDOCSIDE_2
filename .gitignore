@@ -1,0 +1,11 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets (API keys for API mode later)
+.env
+
+# Node / Tauri (for later)
+node_modules/
+src-tauri/target/
