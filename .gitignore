@@ -9,3 +9,4 @@ __pycache__/
 # Node / Tauri (for later)
 node_modules/
 src-tauri/target/
+scan_output/
