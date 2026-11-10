@@ -1,5 +1,5 @@
 """
-scanner.py  (Round 1: the generic scanner)
+scanner.py  (Round 1: the generic scanner, plus Round 2 for Laravel apps)
 
 Reads a software project folder and collects simple facts about it.
 No AI is used here. It only READS files, it never changes anything
@@ -28,6 +28,8 @@ import sys
 from collections import Counter
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+
+from laravel_scanner import scan_laravel, print_laravel
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +142,7 @@ class ProjectSnapshot:
     readme_excerpt: str
     env_keys: list
     warnings: list
+    laravel: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +244,9 @@ def build_tree(files, root_name):
     lines = [f"{root_name}/"]
     for key in ordered:
         indent = "  " * len(key)
-        lines.append(f"{indent}{key[-1]}/  ({folder_counts[key]} files)")
+        count = folder_counts[key]
+        word = "file" if count == 1 else "files"
+        lines.append(f"{indent}{key[-1]}/  ({count} {word})")
         if len(lines) >= MAX_TREE_LINES:
             lines.append("  ...")
             break
@@ -433,6 +438,16 @@ def scan_project(project_path):
 
     tree, top_level_files = build_tree(files, root_name)
 
+    # Round 2: extra details when the project is a Laravel app
+    laravel = {}
+    package_names = {
+        name.lower()
+        for dep in dependencies
+        for name in list(dep.packages) + list(dep.dev_packages)
+    }
+    if "artisan" in root_files and "laravel/framework" in package_names:
+        laravel = asdict(scan_laravel(root, files, package_names, warnings))
+
     return ProjectSnapshot(
         name=root_name,
         root=str(root),
@@ -450,6 +465,7 @@ def scan_project(project_path):
         readme_excerpt=readme_excerpt,
         env_keys=read_env_key_names(root, root_files),
         warnings=warnings,
+        laravel=laravel,
     )
 
 
@@ -494,7 +510,8 @@ def print_summary(snapshot, saved_path):
     print("Languages")
     if snapshot.languages:
         for language, count in snapshot.languages.items():
-            print(f"  {language:<12} {count} files")
+            word = "file" if count == 1 else "files"
+            print(f"  {language:<12} {count} {word}")
     else:
         print("  none found")
 
@@ -518,6 +535,10 @@ def print_summary(snapshot, saved_path):
     print()
     tools = ", ".join(snapshot.test_tools) or "no known test tool"
     print(f"Tests: {snapshot.test_file_count} test files ({tools})")
+
+    if snapshot.laravel:
+        print()
+        print_laravel(snapshot.laravel)
 
     print()
     print(f"Settings in .env.example: {len(snapshot.env_keys)}")
